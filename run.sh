@@ -1,0 +1,1 @@
+gcc main.c -lpcap -o main && ./main

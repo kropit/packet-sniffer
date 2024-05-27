@@ -1,1 +1,3 @@
 # čmuchač
+
+* zatim moc necmucha
