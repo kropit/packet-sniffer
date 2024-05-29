@@ -1,1 +1,1 @@
-gcc main.c -lpcap -o main && ./main
+gcc main.c -lpcap -ggdb -o main && ./main
