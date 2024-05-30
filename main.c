@@ -1,9 +1,11 @@
-
 #include <arpa/inet.h>
+#include <netinet/in.h>
 #include <pcap/pcap.h>
 #include <stdio.h>
 #include <sys/types.h>
 
+/* default snap length (maximum bytes per packet to capture) */
+#define SNAP_LEN 1518
 /* ethernet headers are always exactly 14 bytes */
 #define SIZE_ETHERNET 14
 /* Ethernet addresses are 6 bytes */
@@ -67,21 +69,20 @@ struct sniff_tcp {
 void packet_handler(u_char* user,
                     const struct pcap_pkthdr* header,
                     const u_char* packet) {
-
-  static int count = 1;
+  static int count = 1;  // counter
 
   printf("%d  ", count);
   count++;
 
   printf("PACKET: Length %d \n\n", header->len);
 
-  for (int i = 0; i < header->len; i++) {   //hex
-    printf("%02x  ", packet[i]);
-    if ((i + 1) % 16 == 0) {
-      printf("\n");
+  /*  for (int i = 0; i < header->len; i++) {  // hex
+      printf("%02x  ", packet[i]);
+      if ((i + 1) % 16 == 0) {
+        printf("\n");
+      }
     }
-  }
-  
+  */
 
   const struct sniff_ethernet* ethernet; /* The ethernet header */
   const struct sniff_ip* ip;             /* The IP header */
@@ -94,46 +95,111 @@ void packet_handler(u_char* user,
 
   ethernet = (struct sniff_ethernet*)(packet);
 
-  switch (htons(ethernet->ether_type)) {
-    case 0x0800:
+  ip = (struct sniff_ip*)(packet + SIZE_ETHERNET);
+  size_ip = IP_HL(ip) * 4;
 
-      ip = (struct sniff_ip*)(packet + SIZE_ETHERNET);
-      size_ip = IP_HL(ip) * 4;
-      if (size_tcp > 24) {
-        printf("invalid IP header length %u bytes\n", size_tcp);
-        return;
-      }
+  tcp = (struct sniff_tcp*)(packet + SIZE_ETHERNET + size_ip);
+  size_tcp = TH_OFF(tcp) * 4;
+
+  switch (htons(ethernet->ether_type)) {
+    case 0x0800:  // IP
+
+      /*  if (size_tcp > 24) {
+            printf("invalid IP header length %u bytes\n", size_tcp);
+            return;
+          }
+              */
       switch (ip->ip_p) {
-        case 6:
-          tcp = (struct sniff_tcp*)(packet + SIZE_ETHERNET + size_ip);
-          size_tcp = TH_OFF(tcp) * 4;
-          printf("\n\nsPORT: %d \n", htons(tcp->th_sport));
+        case 6:  // TCP
+          printf("TCP\n\n");
+          printf("      sPORT: %d\n", htons(tcp->th_sport));
+          printf("      dPORT: %d\n", htons(tcp->th_dport));
+          printf("       From: %s\n", inet_ntoa(ip->ip_src));
+          printf("         To: %s\n", inet_ntoa(ip->ip_dst));
+
+          break;
+
+        case 17:  // UDP
+          printf("UDP\n\n");
+          printf("      sPORT: %d\n", htons(tcp->th_sport));
+          printf("      dPORT: %d\n", htons(tcp->th_dport));
+          printf("       From: %s\n", inet_ntoa(ip->ip_src));
+          printf("         To: %s\n", inet_ntoa(ip->ip_dst));
+
+          break;
+
+        case 1:  // ICMP
+          printf("ICMP");
+          break;
+
+        case 2:  // IGMP
+          printf("IGMP");
+          break;
       }
       break;
-    default:
+
+    case 0x0806:
+      printf("ARP: NO info(for now)");
       break;
-  }
-  if (ethernet->ether_type != 8) {
-    printf("NOT IP");
-    return;
+
+    default:
+      printf("NOT IP");
+      break;
   }
 
   // payload = (u_char *)(packet + SIZE_ETHERNET + size_ip + size_tcp);
 
-  // printf("  %d \n", ip->ip_p);
-
-    printf("\n\n*************************************************\n\n");
-
+  printf("\n*************************************************\n");
 }
 
 int main() {
   char errbuf[PCAP_ERRBUF_SIZE];
   pcap_t* p;
 
-  p = pcap_open_offline("cap.pcap", errbuf);
+  pcap_if_t *alldevs, *d;
 
+  struct bpf_program fp; /* The compiled filter expression */
+  char filter_exp[] = "port 443";
+
+  bpf_u_int32 mask;
+  bpf_u_int32 net;
+
+  d = alldevs;  // first dev
+
+/*  if (pcap_lookupnet(d->name, &net, &mask, errbuf) == -1) {
+    fprintf(stderr, "Couldn't get netmask for device %s: %s\n", d->name,
+            errbuf);
+    net = 0;
+    mask = 0;
+  }
+*/
+  p = pcap_open_live(d->name, SNAP_LEN, 1, 1000, errbuf);
+  // p = pcap_open_offline("sniff.pcap", errbuf);
+  if (p == NULL) {
+    fprintf(stderr, "Couldn't open device %s: %s\n", d->name, errbuf);
+    pcap_freealldevs(alldevs);
+    return 2;
+  }
+
+  //pcap_datalink(p);
+
+ /* if (pcap_compile(p, &fp, filter_exp, 0, net) == -1) {
+    printf("filter doesn't work :(( %s: %s\n", filter_exp, pcap_geterr(p));
+    return (2);
+  }
+
+  if (pcap_setfilter(p, &fp) == -1) {
+    printf("cant apply filter :(( %s: %s\n", filter_exp, pcap_geterr(p));
+    return (2);
+  }
+*/
   pcap_loop(p, 0, packet_handler, NULL);
 
-  // pcap_freealldevs(pcap_if_t *);
+
+
+  pcap_freecode(&fp);
+  pcap_freealldevs(alldevs);
   pcap_close(p);
+
+  return 0;
 }
