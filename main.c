@@ -108,7 +108,7 @@ void packet_handler(u_char* user,
             printf("invalid IP header length %u bytes\n", size_tcp);
             return;
           }
-              */
+      */
       switch (ip->ip_p) {
         case 6:  // TCP
           printf("TCP\n\n");
@@ -164,15 +164,22 @@ int main() {
   bpf_u_int32 mask;
   bpf_u_int32 net;
 
+  if (pcap_findalldevs(&alldevs, errbuf) == -1) {
+    fprintf(stderr, "Error finding devices: %s\n", errbuf);
+    return 1;
+  }
+
   d = alldevs;  // first dev
 
-/*  if (pcap_lookupnet(d->name, &net, &mask, errbuf) == -1) {
-    fprintf(stderr, "Couldn't get netmask for device %s: %s\n", d->name,
-            errbuf);
-    net = 0;
-    mask = 0;
-  }
-*/
+  /*
+  if (pcap_lookupnet(d->name, &net, &mask, errbuf) == -1) {
+     fprintf(stderr, "Couldn't get netmask for device %s: %s\n", d->name,
+             errbuf);
+     net = 0;
+     mask = 0;
+   }
+ */
+
   p = pcap_open_live(d->name, SNAP_LEN, 1, 1000, errbuf);
   // p = pcap_open_offline("sniff.pcap", errbuf);
   if (p == NULL) {
@@ -181,9 +188,7 @@ int main() {
     return 2;
   }
 
-  //pcap_datalink(p);
-
- /* if (pcap_compile(p, &fp, filter_exp, 0, net) == -1) {
+  if (pcap_compile(p, &fp, filter_exp, 0, net) == -1) {
     printf("filter doesn't work :(( %s: %s\n", filter_exp, pcap_geterr(p));
     return (2);
   }
@@ -192,10 +197,8 @@ int main() {
     printf("cant apply filter :(( %s: %s\n", filter_exp, pcap_geterr(p));
     return (2);
   }
-*/
-  pcap_loop(p, 0, packet_handler, NULL);
 
-
+  pcap_loop(p, 100, packet_handler, NULL);
 
   pcap_freecode(&fp);
   pcap_freealldevs(alldevs);
