@@ -159,7 +159,10 @@ int main() {
   pcap_if_t *alldevs, *d;
 
   struct bpf_program fp; /* The compiled filter expression */
-  char filter_exp[] = "port 443";
+  char filter_exp[] = "tcp or udp";    
+
+
+
 
   bpf_u_int32 mask;
   bpf_u_int32 net;

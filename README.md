@@ -1,3 +1,3 @@
 # čmuchač
 
-* zatim moc necmucha
+* UZ CMUCHA!!!!
